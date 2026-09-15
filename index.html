@@ -457,6 +457,7 @@ const UTILITIES = [
 
 /* In-memory prefill store for "Modifier" — not persisted in URL */
 let _prefill = null;
+let _suppressNextHashChange = false;
 
 /* ═══════════════════════════════════════════════════════
    STATE ENGINE
@@ -970,12 +971,11 @@ function renderAuditView(state) {
     if (btn.classList.contains('toggle-btn')) return; // skip toggles
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
-      const saved = { ...state.slots[slotIdx] }; // snapshot before clearing
+      _prefill = { ...state.slots[slotIdx] }; // snapshot before clearing
       state.slots[slotIdx] = emptySlot();
-      saveState(state); // triggers hashchange → renderApp() runs with _prefill=null (blank form)
-      // Set _prefill AFTER saveState so hashchange fires first, then we re-render with values
-      _prefill = saved;
-      renderGroupView(state); // explicit re-render overwrites the blank one, now with _prefill set
+      _suppressNextHashChange = true; // prevent hashchange from wiping _prefill
+      saveState(state);
+      renderGroupView(state); // render now, with _prefill set
     });
   });
 
@@ -1019,7 +1019,11 @@ function renderApp() {
 renderApp();
 
 // React to hash changes (back/forward navigation)
-window.addEventListener('hashchange', renderApp);
+// Skip one render if flagged (e.g. after a "Modifier" click that handles its own render)
+window.addEventListener('hashchange', () => {
+  if (_suppressNextHashChange) { _suppressNextHashChange = false; return; }
+  renderApp();
+});
 </script>
 
 </body>
