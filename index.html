@@ -514,7 +514,7 @@ function classIconUrl(cls) {
 }
 
 function buildIsFilled(b) { return b && b.race && b.class && b.spec1 && b.spec2; }
-function slotIsFilled(s)  { return s && s.pseudo && buildIsFilled(s.buildA); }
+function slotIsFilled(s)  { return s && s.pseudo; }  // pseudo alone is enough to reserve a slot
 
 /* Returns the active build object for a slot */
 function activeBuild(s) {
@@ -582,18 +582,21 @@ function renderSlotCards(slots, faction, activeIndex) {
 
     if (filled) {
       const ab = activeBuild(s);
+      const hasBuild = buildIsFilled(ab);
       const classColor = CLASS_COLORS[ab.class] || '#aaa';
       const hasB = buildIsFilled(s.buildB);
       return `
         <div class="slot-card filled ${isActive?'active':''}" id="slot-card-${i}">
           <div class="slot-num">Joueur ${i+1}</div>
-          <img class="slot-class-icon" src="${classIconUrl(ab.class)}" alt="${esc(ab.class)}" title="${esc(ab.class)}" onerror="this.style.display='none'">
+          ${hasBuild ? `<img class="slot-class-icon" src="${classIconUrl(ab.class)}" alt="${esc(ab.class)}" title="${esc(ab.class)}" onerror="this.style.display='none'">` : `<span class="slot-lock" style="font-size:1.4rem;opacity:0.4">?</span>`}
           <div class="slot-pseudo">${esc(s.pseudo)}</div>
-          <div class="slot-class" style="color:${classColor}">${esc(ab.class)}</div>
-          <div class="slot-race">${esc(ab.race)}</div>
-          <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
-          ${getRoleBadgeHtml(ab)}
-          ${hasB ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:2px">± Build alternatif</div>` : ''}
+          ${hasBuild ? `
+            <div class="slot-class" style="color:${classColor}">${esc(ab.class)}</div>
+            <div class="slot-race">${esc(ab.race)}</div>
+            <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
+            ${getRoleBadgeHtml(ab)}
+            ${hasB ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:2px">± Build alternatif</div>` : ''}
+          ` : `<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic">Build à compléter</div>`}
         </div>`;
     } else if (isActive) {
       return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
@@ -741,23 +744,35 @@ function renderGroupView(state) {
     const bBVisible = document.getElementById('fb-block').style.display !== 'none';
     const buildB = bBVisible ? readBuild('fb') : null;
 
-    if (!pseudo || !buildA.race || !buildA.class || !buildA.spec1 || !buildA.spec2) {
-      err.textContent = 'Build A : tous les champs sont requis.'; return;
+    if (!pseudo) {
+      err.textContent = 'Le pseudo est requis.'; return;
     }
-    if (buildA.spec1 === buildA.spec2) {
-      err.textContent = 'Build A : les deux spécialisations doivent être différentes.'; return;
+    // Build A is optional — but if partially filled, must be complete
+    const buildAPartial = buildA.race || buildA.class || buildA.spec1 || buildA.spec2;
+    if (buildAPartial) {
+      if (!buildA.race || !buildA.class || !buildA.spec1 || !buildA.spec2) {
+        err.textContent = 'Build A : complétez tous les champs ou laissez tout vide.'; return;
+      }
+      if (buildA.spec1 === buildA.spec2) {
+        err.textContent = 'Build A : les deux spécialisations doivent être différentes.'; return;
+      }
     }
     if (buildB) {
-      if (!buildB.race || !buildB.class || !buildB.spec1 || !buildB.spec2) {
-        err.textContent = 'Build B : complétez tous les champs ou supprimez le build alternatif.'; return;
+      const buildBPartial = buildB.race || buildB.class || buildB.spec1 || buildB.spec2;
+      if (buildBPartial && (!buildB.race || !buildB.class || !buildB.spec1 || !buildB.spec2)) {
+        err.textContent = 'Build B : complétez tous les champs ou laissez tout vide.'; return;
       }
-      if (buildB.spec1 === buildB.spec2) {
+      if (buildB.spec1 && buildB.spec1 === buildB.spec2) {
         err.textContent = 'Build B : les deux spécialisations doivent être différentes.'; return;
       }
+      // Discard Build B entirely if nothing was filled
+      if (!buildBPartial) { buildB = null; }
     }
+    // Discard Build A if nothing was filled (pseudo-only save)
+    const buildAFinal = buildAPartial ? buildA : emptyBuild();
     err.textContent = '';
 
-    state.slots[idx] = { pseudo, buildA, buildB: buildB || null, active: 'A' };
+    state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A' };
     saveState(state);
     renderApp();
   });
@@ -775,10 +790,9 @@ function renderGroupView(state) {
    AUDIT
 ═══════════════════════════════════════════════════════ */
 
-/* Audit operates on the active build of each filled slot */
+/* Audit operates on the active build of each filled slot — skips pseudo-only slots */
 function computeAudit(slots) {
-  // Build proxy objects that look like the old { pseudo, class, spec1, spec2 } shape
-  const filled = slots.filter(slotIsFilled).map(s => {
+  const filled = slots.filter(s => slotIsFilled(s) && buildIsFilled(activeBuild(s))).map(s => {
     const b = activeBuild(s);
     return { pseudo: s.pseudo, class: b.class, spec1: b.spec1, spec2: b.spec2 };
   });
@@ -800,7 +814,7 @@ function getRoleBadgeHtml(b) {
 
 function countRoles(slots) {
   const counts = { Tank: 0, Healer: 0, DPS: 0 };
-  slots.filter(slotIsFilled).forEach(s => {
+  slots.filter(s => slotIsFilled(s) && buildIsFilled(activeBuild(s))).forEach(s => {
     const b = activeBuild(s);
     const r1 = getRole(b.class, b.spec1);
     const r2 = getRole(b.class, b.spec2);
