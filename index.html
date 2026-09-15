@@ -788,8 +788,8 @@ function renderAuditView(state) {
   app.querySelectorAll('[data-slot]').forEach(btn => {
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
-      // Clear this slot and all subsequent slots
-      for (let i = slotIdx; i < 5; i++) state.slots[i] = emptySlot();
+      // Only clear the edited slot — keep all others intact
+      state.slots[slotIdx] = emptySlot();
       saveState(state);
       renderApp();
     });
