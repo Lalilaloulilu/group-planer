@@ -455,6 +455,9 @@ const UTILITIES = [
     check: s => s.find(p => ['Druid','Mage'].includes(p.class)) },
 ];
 
+/* In-memory prefill store for "Modifier" — not persisted in URL */
+let _prefill = null;
+
 /* ═══════════════════════════════════════════════════════
    STATE ENGINE
 ═══════════════════════════════════════════════════════ */
@@ -692,6 +695,47 @@ function renderGroupView(state) {
 
   if (idx < 0) return;
 
+  /* Pre-fill a build block from a build object */
+  function prefillBuild(prefix, build) {
+    if (!build || !build.race) return;
+    const raceEl  = document.getElementById(`${prefix}-race`);
+    const classEl = document.getElementById(`${prefix}-class`);
+    const spec1El = document.getElementById(`${prefix}-spec1`);
+    const spec2El = document.getElementById(`${prefix}-spec2`);
+
+    // Race
+    raceEl.value = build.race;
+
+    // Populate class dropdown
+    const classes = RACE_CLASSES[build.race] || [];
+    classEl.innerHTML = '<option value="">— Choisir —</option>' +
+      classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    classEl.disabled = false;
+    classEl.value = build.class;
+
+    // Populate spec dropdowns
+    const specs = CLASS_SPECS[build.class] || [];
+    const opts = specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    spec1El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+    spec2El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+    spec1El.disabled = false;
+    spec2El.disabled = false;
+    spec1El.value = build.spec1;
+    spec2El.value = build.spec2;
+  }
+
+  /* Apply prefill if coming from a "Modifier" click */
+  if (_prefill) {
+    document.getElementById('f-pseudo').value = _prefill.pseudo || '';
+    prefillBuild('fa', _prefill.buildA);
+    if (_prefill.buildB && buildIsFilled(_prefill.buildB)) {
+      document.getElementById('fb-block').style.display = '';
+      document.getElementById('add-build-b-wrap').style.display = 'none';
+      prefillBuild('fb', _prefill.buildB);
+    }
+    _prefill = null; // consume once
+  }
+
   /* Wire cascading dropdowns for a given prefix */
   function wireDropdowns(prefix) {
     const raceEl  = document.getElementById(`${prefix}-race`);
@@ -926,6 +970,7 @@ function renderAuditView(state) {
     if (btn.classList.contains('toggle-btn')) return; // skip toggles
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
+      _prefill = { ...state.slots[slotIdx] }; // save current values for form pre-fill
       state.slots[slotIdx] = emptySlot();
       saveState(state);
       renderApp();
