@@ -455,9 +455,8 @@ const UTILITIES = [
     check: s => s.find(p => ['Druid','Mage'].includes(p.class)) },
 ];
 
-/* In-memory prefill store for "Modifier" — not persisted in URL */
-let _prefill = null;
-let _suppressNextHashChange = false;
+/* Index of slot being edited (-1 = none) — in-memory only */
+let _editingSlotIdx = -1;
 
 /* ═══════════════════════════════════════════════════════
    STATE ENGINE
@@ -616,7 +615,8 @@ function renderSlotCards(slots, faction, activeIndex) {
 
 function renderGroupView(state) {
   const app = document.getElementById('app');
-  const idx = nextEmptyIndex(state.slots);
+  // If editing an existing slot, target that slot; otherwise target the first empty one
+  const idx = _editingSlotIdx >= 0 ? _editingSlotIdx : nextEmptyIndex(state.slots);
   const factionLabel = state.faction === 'horde' ? '<span class="horde">⚔ Horde</span>' : '<span class="alliance">🛡 Alliance</span>';
   const factionRaces = FACTION_RACES[state.faction] || [];
 
@@ -703,18 +703,12 @@ function renderGroupView(state) {
     const classEl = document.getElementById(`${prefix}-class`);
     const spec1El = document.getElementById(`${prefix}-spec1`);
     const spec2El = document.getElementById(`${prefix}-spec2`);
-
-    // Race
     raceEl.value = build.race;
-
-    // Populate class dropdown
     const classes = RACE_CLASSES[build.race] || [];
     classEl.innerHTML = '<option value="">— Choisir —</option>' +
       classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
     classEl.disabled = false;
     classEl.value = build.class;
-
-    // Populate spec dropdowns
     const specs = CLASS_SPECS[build.class] || [];
     const opts = specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
     spec1El.innerHTML = '<option value="">— Choisir —</option>' + opts;
@@ -725,16 +719,16 @@ function renderGroupView(state) {
     spec2El.value = build.spec2;
   }
 
-  /* Apply prefill if coming from a "Modifier" click */
-  if (_prefill) {
-    document.getElementById('f-pseudo').value = _prefill.pseudo || '';
-    prefillBuild('fa', _prefill.buildA);
-    if (_prefill.buildB && buildIsFilled(_prefill.buildB)) {
+  /* Pre-fill form from existing slot data when editing */
+  const existing = state.slots[idx];
+  if (existing && existing.pseudo) {
+    document.getElementById('f-pseudo').value = existing.pseudo;
+    if (buildIsFilled(existing.buildA)) prefillBuild('fa', existing.buildA);
+    if (existing.buildB && buildIsFilled(existing.buildB)) {
       document.getElementById('fb-block').style.display = '';
       document.getElementById('add-build-b-wrap').style.display = 'none';
-      prefillBuild('fb', _prefill.buildB);
+      prefillBuild('fb', existing.buildB);
     }
-    _prefill = null; // consume once
   }
 
   /* Wire cascading dropdowns for a given prefix */
@@ -818,6 +812,7 @@ function renderGroupView(state) {
     err.textContent = '';
 
     state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A' };
+    _editingSlotIdx = -1; // done editing
     saveState(state);
     renderApp();
   });
@@ -971,11 +966,8 @@ function renderAuditView(state) {
     if (btn.classList.contains('toggle-btn')) return; // skip toggles
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
-      _prefill = { ...state.slots[slotIdx] }; // snapshot before clearing
-      state.slots[slotIdx] = emptySlot();
-      _suppressNextHashChange = true; // prevent hashchange from wiping _prefill
-      saveState(state);
-      renderGroupView(state); // render now, with _prefill set
+      _editingSlotIdx = slotIdx; // mark which slot we're editing
+      renderGroupView(state);   // re-render form view — no state change, no saveState
     });
   });
 
@@ -1000,6 +992,7 @@ function renderAuditView(state) {
 ═══════════════════════════════════════════════════════ */
 
 function renderApp() {
+  _editingSlotIdx = -1; // full re-render from URL — discard any in-progress edit
   const state = loadState();
 
   if (!state || !state.faction) {
@@ -1019,11 +1012,7 @@ function renderApp() {
 renderApp();
 
 // React to hash changes (back/forward navigation)
-// Skip one render if flagged (e.g. after a "Modifier" click that handles its own render)
-window.addEventListener('hashchange', () => {
-  if (_suppressNextHashChange) { _suppressNextHashChange = false; return; }
-  renderApp();
-});
+window.addEventListener('hashchange', renderApp);
 </script>
 
 </body>
