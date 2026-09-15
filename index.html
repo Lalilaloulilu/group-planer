@@ -455,6 +455,11 @@ const UTILITIES = [
     check: s => s.find(p => ['Druid','Mage'].includes(p.class)) },
 ];
 
+const PROFESSIONS = [
+  'Alchemy','Blacksmithing','Enchanting','Engineering',
+  'Leatherworking','Tailoring','Herbalism','Mining','Skinning',
+];
+
 /* Index of slot being edited (-1 = none) — in-memory only */
 let _editingSlotIdx = -1;
 
@@ -600,6 +605,7 @@ function renderSlotCards(slots, faction, activeIndex) {
             ${getRoleBadgeHtml(ab)}
             ${hasB ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:2px">± Build alternatif</div>` : ''}
           ` : `<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic">Build à compléter</div>`}
+          ${(s.prof1||s.prof2) ? `<div style="font-size:0.65rem;color:#a0c0ff;margin-top:2px">${[s.prof1,s.prof2].filter(Boolean).join(' · ')}</div>` : ''}
         </div>`;
     } else if (isActive) {
       return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
@@ -675,6 +681,25 @@ function renderGroupView(state) {
             <button type="button" class="btn btn-sm" id="btn-add-buildb">＋ Ajouter un build alternatif (Build B)</button>
           </div>
           ${buildFormBlock('fb', 'Build B — Alternatif', raceOptions, true)}
+          <div style="font-size:0.78rem;color:var(--gold);font-family:'Cinzel',serif;letter-spacing:0.08em;
+                      text-transform:uppercase;margin-bottom:0.6rem;border-top:1px solid var(--gold-dark);
+                      padding-top:0.7rem;margin-top:0.8rem">Professions (optionnel — 2 max)</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="f-prof1">Profession 1</label>
+              <select id="f-prof1">
+                <option value="">— Aucune —</option>
+                ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="f-prof2">Profession 2</label>
+              <select id="f-prof2">
+                <option value="">— Aucune —</option>
+                ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
           <div id="form-error" class="form-error"></div>
           <div class="form-actions">
             <button type="submit" class="btn">Valider mon slot →</button>
@@ -729,6 +754,8 @@ function renderGroupView(state) {
       document.getElementById('add-build-b-wrap').style.display = 'none';
       prefillBuild('fb', existing.buildB);
     }
+    if (existing.prof1) document.getElementById('f-prof1').value = existing.prof1;
+    if (existing.prof2) document.getElementById('f-prof2').value = existing.prof2;
   }
 
   /* Wire cascading dropdowns for a given prefix */
@@ -782,6 +809,8 @@ function renderGroupView(state) {
     const err    = document.getElementById('form-error');
     const bBVisible = document.getElementById('fb-block').style.display !== 'none';
     const buildB = bBVisible ? readBuild('fb') : null;
+    const prof1  = document.getElementById('f-prof1').value;
+    const prof2  = document.getElementById('f-prof2').value;
 
     if (!pseudo) {
       err.textContent = 'Le pseudo est requis.'; return;
@@ -811,7 +840,10 @@ function renderGroupView(state) {
     const buildAFinal = buildAPartial ? buildA : emptyBuild();
     err.textContent = '';
 
-    state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A' };
+    if (prof1 && prof1 === prof2) {
+      err.textContent = 'Les deux professions doivent être différentes.'; return;
+    }
+    state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A', prof1: prof1||'', prof2: prof2||'' };
     _editingSlotIdx = -1; // done editing
     saveState(state);
     renderApp();
@@ -883,6 +915,31 @@ function renderAuditView(state) {
     cats[u.cat].push(u);
   });
 
+  // Professions summary
+  const profMap = {};
+  state.slots.filter(slotIsFilled).forEach(s => {
+    [s.prof1, s.prof2].filter(Boolean).forEach(p => {
+      if (!profMap[p]) profMap[p] = [];
+      profMap[p].push(s.pseudo);
+    });
+  });
+  const allProfs = PROFESSIONS.map(p => ({
+    name: p,
+    players: profMap[p] || [],
+  }));
+  const profSection = `
+    <div class="audit-section wow-panel" style="padding:1rem 1.2rem;grid-column:1/-1">
+      <h3>Professions</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.3rem 1rem;margin-top:0.4rem">
+        ${allProfs.map(p => `
+          <div class="audit-row tooltip-wrap" style="border-bottom:none;padding:0.2rem 0">
+            <span class="audit-icon">${p.players.length ? '✅' : '❌'}</span>
+            <span class="audit-label" style="font-size:0.8rem">${esc(p.name)}</span>
+            ${p.players.length ? `<span class="audit-provider">${p.players.map(esc).join(', ')}</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+
   const auditSections = Object.entries(cats).map(([cat, items]) => `
     <div class="audit-section wow-panel" style="padding:1rem 1.2rem">
       <h3>${esc(cat)}</h3>
@@ -915,6 +972,7 @@ function renderAuditView(state) {
         <div class="slot-race">${esc(ab.race)}</div>
         <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
         ${getRoleBadgeHtml(ab)}
+        ${(s.prof1||s.prof2) ? `<div style="font-size:0.68rem;color:#a0c0ff;margin-top:3px">${[s.prof1,s.prof2].filter(Boolean).join(' · ')}</div>` : ''}
         <button class="btn btn-sm" style="margin-top:0.4rem" data-slot="${i}">✏️ Modifier</button>
       </div>`;
   }).join('');
@@ -941,7 +999,7 @@ function renderAuditView(state) {
 
     <div class="slots-grid" style="margin-bottom:1.5rem">${playerCards}</div>
 
-    <div class="audit-grid">${auditSections}</div>
+    <div class="audit-grid">${auditSections}${profSection}</div>
 
     <div class="share-bar">
       <button class="btn btn-copy" id="btn-copy-audit">📋 Copier le lien du groupe</button>
