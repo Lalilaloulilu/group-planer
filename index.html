@@ -467,7 +467,7 @@ let _editingSlotIdx = -1;
    STATE ENGINE
 ═══════════════════════════════════════════════════════ */
 
-function emptyBuild() { return { race:'', class:'', spec1:'', spec2:'' }; }
+function emptyBuild() { return { race:'', class:'', spec1:'', spec2:'', prof1:'', prof2:'' }; }
 function emptySlot()  { return { pseudo:'', buildA: emptyBuild(), buildB: null, active:'A' }; }
 function emptyState(faction) {
   return { faction, slots: [emptySlot(),emptySlot(),emptySlot(),emptySlot(),emptySlot()] };
@@ -476,11 +476,17 @@ function emptyState(faction) {
 /* Migrate old-format slot { pseudo, race, class, spec1, spec2 } → new format */
 function migrateSlot(s) {
   if (!s) return emptySlot();
-  if (s.buildA) return s; // already new format
+  if (s.buildA) {
+    // Ensure builds have prof fields; migrate slot-level profs into buildA if needed
+    if (!('prof1' in s.buildA)) s.buildA.prof1 = s.prof1 || '';
+    if (!('prof2' in s.buildA)) s.buildA.prof2 = s.prof2 || '';
+    if (s.buildB && !('prof1' in s.buildB)) { s.buildB.prof1 = ''; s.buildB.prof2 = ''; }
+    return s;
+  }
   if (s.pseudo || s.race || s.class) {
     return {
       pseudo: s.pseudo || '',
-      buildA: { race: s.race||'', class: s.class||'', spec1: s.spec1||'', spec2: s.spec2||'' },
+      buildA: { race: s.race||'', class: s.class||'', spec1: s.spec1||'', spec2: s.spec2||'', prof1: s.prof1||'', prof2: s.prof2||'' },
       buildB: null,
       active: 'A',
     };
@@ -605,7 +611,7 @@ function renderSlotCards(slots, faction, activeIndex) {
             ${getRoleBadgeHtml(ab)}
             ${hasB ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:2px">± Build alternatif</div>` : ''}
           ` : `<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic">Build à compléter</div>`}
-          ${(s.prof1||s.prof2) ? `<div style="font-size:0.65rem;color:#a0c0ff;margin-top:2px">${[s.prof1,s.prof2].filter(Boolean).join(' · ')}</div>` : ''}
+          ${(ab.prof1||ab.prof2) ? `<div style="font-size:0.65rem;color:#a0c0ff;margin-top:2px">${[ab.prof1,ab.prof2].filter(Boolean).join(' · ')}</div>` : ''}
         </div>`;
     } else if (isActive) {
       return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
@@ -659,6 +665,20 @@ function renderGroupView(state) {
               <option value="">— Classe d'abord —</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="${prefix}-prof1">Profession 1</label>
+            <select id="${prefix}-prof1">
+              <option value="">— Aucune —</option>
+              ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="${prefix}-prof2">Profession 2</label>
+            <select id="${prefix}-prof2">
+              <option value="">— Aucune —</option>
+              ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+            </select>
+          </div>
         </div>
       </div>`;
   }
@@ -681,25 +701,6 @@ function renderGroupView(state) {
             <button type="button" class="btn btn-sm" id="btn-add-buildb">＋ Ajouter un build alternatif (Build B)</button>
           </div>
           ${buildFormBlock('fb', 'Build B — Alternatif', raceOptions, true)}
-          <div style="font-size:0.78rem;color:var(--gold);font-family:'Cinzel',serif;letter-spacing:0.08em;
-                      text-transform:uppercase;margin-bottom:0.6rem;border-top:1px solid var(--gold-dark);
-                      padding-top:0.7rem;margin-top:0.8rem">Professions (optionnel — 2 max)</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="f-prof1">Profession 1</label>
-              <select id="f-prof1">
-                <option value="">— Aucune —</option>
-                ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="f-prof2">Profession 2</label>
-              <select id="f-prof2">
-                <option value="">— Aucune —</option>
-                ${PROFESSIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
           <div id="form-error" class="form-error"></div>
           <div class="form-actions">
             <button type="submit" class="btn">Valider mon slot →</button>
@@ -742,6 +743,8 @@ function renderGroupView(state) {
     spec2El.disabled = false;
     spec1El.value = build.spec1;
     spec2El.value = build.spec2;
+    if (build.prof1) document.getElementById(`${prefix}-prof1`).value = build.prof1;
+    if (build.prof2) document.getElementById(`${prefix}-prof2`).value = build.prof2;
   }
 
   /* Pre-fill form from existing slot data when editing */
@@ -754,8 +757,6 @@ function renderGroupView(state) {
       document.getElementById('add-build-b-wrap').style.display = 'none';
       prefillBuild('fb', existing.buildB);
     }
-    if (existing.prof1) document.getElementById('f-prof1').value = existing.prof1;
-    if (existing.prof2) document.getElementById('f-prof2').value = existing.prof2;
   }
 
   /* Wire cascading dropdowns for a given prefix */
@@ -799,6 +800,8 @@ function renderGroupView(state) {
       class: document.getElementById(`${prefix}-class`).value,
       spec1: document.getElementById(`${prefix}-spec1`).value,
       spec2: document.getElementById(`${prefix}-spec2`).value,
+      prof1: document.getElementById(`${prefix}-prof1`).value,
+      prof2: document.getElementById(`${prefix}-prof2`).value,
     };
   }
 
@@ -809,9 +812,6 @@ function renderGroupView(state) {
     const err    = document.getElementById('form-error');
     const bBVisible = document.getElementById('fb-block').style.display !== 'none';
     const buildB = bBVisible ? readBuild('fb') : null;
-    const prof1  = document.getElementById('f-prof1').value;
-    const prof2  = document.getElementById('f-prof2').value;
-
     if (!pseudo) {
       err.textContent = 'Le pseudo est requis.'; return;
     }
@@ -840,10 +840,13 @@ function renderGroupView(state) {
     const buildAFinal = buildAPartial ? buildA : emptyBuild();
     err.textContent = '';
 
-    if (prof1 && prof1 === prof2) {
-      err.textContent = 'Les deux professions doivent être différentes.'; return;
+    if (buildAPartial && buildAFinal.prof1 && buildAFinal.prof1 === buildAFinal.prof2) {
+      err.textContent = 'Build A : les deux professions doivent être différentes.'; return;
     }
-    state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A', prof1: prof1||'', prof2: prof2||'' };
+    if (buildB && buildB.prof1 && buildB.prof1 === buildB.prof2) {
+      err.textContent = 'Build B : les deux professions doivent être différentes.'; return;
+    }
+    state.slots[idx] = { pseudo, buildA: buildAFinal, buildB: buildB || null, active: 'A' };
     _editingSlotIdx = -1; // done editing
     saveState(state);
     renderApp();
@@ -915,10 +918,11 @@ function renderAuditView(state) {
     cats[u.cat].push(u);
   });
 
-  // Professions summary
+  // Professions summary — based on the active build of each slot
   const profMap = {};
   state.slots.filter(slotIsFilled).forEach(s => {
-    [s.prof1, s.prof2].filter(Boolean).forEach(p => {
+    const b = activeBuild(s);
+    [b.prof1, b.prof2].filter(Boolean).forEach(p => {
       if (!profMap[p]) profMap[p] = [];
       profMap[p].push(s.pseudo);
     });
@@ -972,7 +976,7 @@ function renderAuditView(state) {
         <div class="slot-race">${esc(ab.race)}</div>
         <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
         ${getRoleBadgeHtml(ab)}
-        ${(s.prof1||s.prof2) ? `<div style="font-size:0.68rem;color:#a0c0ff;margin-top:3px">${[s.prof1,s.prof2].filter(Boolean).join(' · ')}</div>` : ''}
+        ${(ab.prof1||ab.prof2) ? `<div style="font-size:0.68rem;color:#a0c0ff;margin-top:3px">${[ab.prof1,ab.prof2].filter(Boolean).join(' · ')}</div>` : ''}
         <button class="btn btn-sm" style="margin-top:0.4rem" data-slot="${i}">✏️ Modifier</button>
       </div>`;
   }).join('');
