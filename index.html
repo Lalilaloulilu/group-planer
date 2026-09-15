@@ -299,6 +299,32 @@
 
     .copied-msg { color: var(--green); font-size: 0.78rem; display: none; }
     .copied-msg.show { display: inline; }
+
+    /* ─── Build A/B toggle ─── */
+    .build-toggle {
+      display: flex;
+      gap: 3px;
+      justify-content: center;
+      margin-bottom: 3px;
+    }
+    .toggle-btn {
+      background: #0e0e1a;
+      border: 1px solid var(--gold-dark);
+      color: var(--text-muted);
+      border-radius: 3px;
+      padding: 1px 8px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .toggle-btn.active {
+      background: rgba(200,150,46,0.18);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .toggle-btn:hover { border-color: var(--gold); color: var(--gold-light); }
   </style>
 </head>
 <body>
@@ -433,9 +459,25 @@ const UTILITIES = [
    STATE ENGINE
 ═══════════════════════════════════════════════════════ */
 
-function emptySlot() { return { pseudo:'', race:'', class:'', spec1:'', spec2:'' }; }
+function emptyBuild() { return { race:'', class:'', spec1:'', spec2:'' }; }
+function emptySlot()  { return { pseudo:'', buildA: emptyBuild(), buildB: null, active:'A' }; }
 function emptyState(faction) {
   return { faction, slots: [emptySlot(),emptySlot(),emptySlot(),emptySlot(),emptySlot()] };
+}
+
+/* Migrate old-format slot { pseudo, race, class, spec1, spec2 } → new format */
+function migrateSlot(s) {
+  if (!s) return emptySlot();
+  if (s.buildA) return s; // already new format
+  if (s.pseudo || s.race || s.class) {
+    return {
+      pseudo: s.pseudo || '',
+      buildA: { race: s.race||'', class: s.class||'', spec1: s.spec1||'', spec2: s.spec2||'' },
+      buildB: null,
+      active: 'A',
+    };
+  }
+  return emptySlot();
 }
 
 function encodeState(obj) {
@@ -451,7 +493,11 @@ function decodeState(hash) {
 function loadState() {
   const h = window.location.hash.slice(1);
   if (!h) return null;
-  return decodeState(h);
+  const raw = decodeState(h);
+  if (!raw) return null;
+  // Migrate old slot format if needed
+  if (raw.slots) raw.slots = raw.slots.map(migrateSlot);
+  return raw;
 }
 
 function saveState(state) {
@@ -467,7 +513,14 @@ function classIconUrl(cls) {
   return `https://wow.zamimg.com/images/wow/icons/medium/classicon_${name}.jpg`;
 }
 
-function slotIsFilled(s) { return s.pseudo && s.race && s.class && s.spec1 && s.spec2; }
+function buildIsFilled(b) { return b && b.race && b.class && b.spec1 && b.spec2; }
+function slotIsFilled(s)  { return s && s.pseudo && buildIsFilled(s.buildA); }
+
+/* Returns the active build object for a slot */
+function activeBuild(s) {
+  if (s.active === 'B' && buildIsFilled(s.buildB)) return s.buildB;
+  return s.buildA;
+}
 
 function nextEmptyIndex(slots) {
   return slots.findIndex(s => !slotIsFilled(s));
@@ -526,18 +579,21 @@ function renderSlotCards(slots, faction, activeIndex) {
   return slots.map((s, i) => {
     const filled = slotIsFilled(s);
     const isActive = i === activeIndex;
-    const classColor = CLASS_COLORS[s.class] || '#aaa';
 
     if (filled) {
+      const ab = activeBuild(s);
+      const classColor = CLASS_COLORS[ab.class] || '#aaa';
+      const hasB = buildIsFilled(s.buildB);
       return `
         <div class="slot-card filled ${isActive?'active':''}" id="slot-card-${i}">
           <div class="slot-num">Joueur ${i+1}</div>
-          <img class="slot-class-icon" src="${classIconUrl(s.class)}" alt="${esc(s.class)}" title="${esc(s.class)}" onerror="this.style.display='none'">
+          <img class="slot-class-icon" src="${classIconUrl(ab.class)}" alt="${esc(ab.class)}" title="${esc(ab.class)}" onerror="this.style.display='none'">
           <div class="slot-pseudo">${esc(s.pseudo)}</div>
-          <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
-          <div class="slot-race">${esc(s.race)}</div>
-          <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
-          ${getRoleBadgeHtml(s)}
+          <div class="slot-class" style="color:${classColor}">${esc(ab.class)}</div>
+          <div class="slot-race">${esc(ab.race)}</div>
+          <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
+          ${getRoleBadgeHtml(ab)}
+          ${hasB ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:2px">± Build alternatif</div>` : ''}
         </div>`;
     } else if (isActive) {
       return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
@@ -557,6 +613,43 @@ function renderGroupView(state) {
   const factionLabel = state.faction === 'horde' ? '<span class="horde">⚔ Horde</span>' : '<span class="alliance">🛡 Alliance</span>';
   const factionRaces = FACTION_RACES[state.faction] || [];
 
+  /* Helper: build one race→class→spec block for the form */
+  function buildFormBlock(prefix, label, raceOptions, collapsed) {
+    return `
+      <div id="${prefix}-block" style="${collapsed?'display:none':''}">
+        <div style="font-size:0.78rem;color:var(--gold);font-family:'Cinzel',serif;letter-spacing:0.08em;
+                    text-transform:uppercase;margin-bottom:0.6rem;border-top:1px solid var(--gold-dark);
+                    padding-top:0.7rem;margin-top:0.4rem">${label}</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="${prefix}-race">Race</label>
+            <select id="${prefix}-race">
+              <option value="">— Choisir —</option>
+              ${raceOptions}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="${prefix}-class">Classe</label>
+            <select id="${prefix}-class" disabled>
+              <option value="">— Race d'abord —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="${prefix}-spec1">Spé principale</label>
+            <select id="${prefix}-spec1" disabled>
+              <option value="">— Classe d'abord —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="${prefix}-spec2">Spé secondaire</label>
+            <select id="${prefix}-spec2" disabled>
+              <option value="">— Classe d'abord —</option>
+            </select>
+          </div>
+        </div>
+      </div>`;
+  }
+
   let formHtml = '';
   if (idx >= 0) {
     const raceOptions = factionRaces.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
@@ -569,32 +662,12 @@ function renderGroupView(state) {
               <label for="f-pseudo">Pseudo</label>
               <input id="f-pseudo" type="text" maxlength="30" placeholder="Votre pseudo in-game" autocomplete="off" />
             </div>
-            <div class="form-group">
-              <label for="f-race">Race</label>
-              <select id="f-race">
-                <option value="">— Choisir —</option>
-                ${raceOptions}
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="f-class">Classe</label>
-              <select id="f-class" disabled>
-                <option value="">— Race d'abord —</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="f-spec1">Spécialisation principale</label>
-              <select id="f-spec1" disabled>
-                <option value="">— Classe d'abord —</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="f-spec2">Spécialisation secondaire</label>
-              <select id="f-spec2" disabled>
-                <option value="">— Classe d'abord —</option>
-              </select>
-            </div>
           </div>
+          ${buildFormBlock('fa', 'Build A', raceOptions, false)}
+          <div id="add-build-b-wrap" style="margin-top:0.8rem">
+            <button type="button" class="btn btn-sm" id="btn-add-buildb">＋ Ajouter un build alternatif (Build B)</button>
+          </div>
+          ${buildFormBlock('fb', 'Build B — Alternatif', raceOptions, true)}
           <div id="form-error" class="form-error"></div>
           <div class="form-actions">
             <button type="submit" class="btn">Valider mon slot →</button>
@@ -614,52 +687,77 @@ function renderGroupView(state) {
     ${formHtml}
   `;
 
-  if (idx < 0) return; // all filled, handled by renderApp
+  if (idx < 0) return;
 
-  // Wire cascading dropdowns
-  const raceEl  = document.getElementById('f-race');
-  const classEl = document.getElementById('f-class');
-  const spec1El = document.getElementById('f-spec1');
-  const spec2El = document.getElementById('f-spec2');
+  /* Wire cascading dropdowns for a given prefix */
+  function wireDropdowns(prefix) {
+    const raceEl  = document.getElementById(`${prefix}-race`);
+    const classEl = document.getElementById(`${prefix}-class`);
+    const spec1El = document.getElementById(`${prefix}-spec1`);
+    const spec2El = document.getElementById(`${prefix}-spec2`);
+    raceEl.addEventListener('change', () => {
+      const classes = RACE_CLASSES[raceEl.value] || [];
+      classEl.innerHTML = '<option value="">— Choisir —</option>' +
+        classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      classEl.disabled = classes.length === 0;
+      spec1El.innerHTML = '<option value="">— Classe d\'abord —</option>';
+      spec2El.innerHTML = '<option value="">— Classe d\'abord —</option>';
+      spec1El.disabled = true; spec2El.disabled = true;
+    });
+    classEl.addEventListener('change', () => {
+      const specs = CLASS_SPECS[classEl.value] || [];
+      const opts = specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+      spec1El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+      spec2El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+      spec1El.disabled = specs.length === 0;
+      spec2El.disabled = specs.length === 0;
+    });
+  }
 
-  raceEl.addEventListener('change', () => {
-    const classes = RACE_CLASSES[raceEl.value] || [];
-    classEl.innerHTML = '<option value="">— Choisir —</option>' +
-      classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
-    classEl.disabled = classes.length === 0;
-    spec1El.innerHTML = '<option value="">— Classe d\'abord —</option>';
-    spec2El.innerHTML = '<option value="">— Classe d\'abord —</option>';
-    spec1El.disabled = true;
-    spec2El.disabled = true;
+  wireDropdowns('fa');
+  wireDropdowns('fb');
+
+  /* Show Build B form on click */
+  document.getElementById('btn-add-buildb').addEventListener('click', () => {
+    document.getElementById('fb-block').style.display = '';
+    document.getElementById('add-build-b-wrap').style.display = 'none';
   });
 
-  classEl.addEventListener('change', () => {
-    const specs = CLASS_SPECS[classEl.value] || [];
-    const opts = specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
-    spec1El.innerHTML = '<option value="">— Choisir —</option>' + opts;
-    spec2El.innerHTML = '<option value="">— Choisir —</option>' + opts;
-    spec1El.disabled = specs.length === 0;
-    spec2El.disabled = specs.length === 0;
-  });
+  /* Read a build from form fields */
+  function readBuild(prefix) {
+    return {
+      race:  document.getElementById(`${prefix}-race`).value,
+      class: document.getElementById(`${prefix}-class`).value,
+      spec1: document.getElementById(`${prefix}-spec1`).value,
+      spec2: document.getElementById(`${prefix}-spec2`).value,
+    };
+  }
 
   document.getElementById('slot-form').addEventListener('submit', e => {
     e.preventDefault();
     const pseudo = document.getElementById('f-pseudo').value.trim();
-    const race   = raceEl.value;
-    const cls    = classEl.value;
-    const spec1  = spec1El.value;
-    const spec2  = spec2El.value;
+    const buildA = readBuild('fa');
     const err    = document.getElementById('form-error');
+    const bBVisible = document.getElementById('fb-block').style.display !== 'none';
+    const buildB = bBVisible ? readBuild('fb') : null;
 
-    if (!pseudo || !race || !cls || !spec1 || !spec2) {
-      err.textContent = 'Tous les champs sont requis.'; return;
+    if (!pseudo || !buildA.race || !buildA.class || !buildA.spec1 || !buildA.spec2) {
+      err.textContent = 'Build A : tous les champs sont requis.'; return;
     }
-    if (spec1 === spec2) {
-      err.textContent = 'Les deux spécialisations doivent être différentes.'; return;
+    if (buildA.spec1 === buildA.spec2) {
+      err.textContent = 'Build A : les deux spécialisations doivent être différentes.'; return;
+    }
+    if (buildB) {
+      if (!buildB.race || !buildB.class || !buildB.spec1 || !buildB.spec2) {
+        err.textContent = 'Build B : complétez tous les champs ou supprimez le build alternatif.'; return;
+      }
+      if (buildB.spec1 === buildB.spec2) {
+        err.textContent = 'Build B : les deux spécialisations doivent être différentes.'; return;
+      }
     }
     err.textContent = '';
 
-    state.slots[idx] = { pseudo, race, class: cls, spec1, spec2 };
+    state.slots[idx] = { pseudo, buildA, buildB: buildB || null, active: 'A' };
     saveState(state);
     renderApp();
   });
@@ -677,19 +775,24 @@ function renderGroupView(state) {
    AUDIT
 ═══════════════════════════════════════════════════════ */
 
+/* Audit operates on the active build of each filled slot */
 function computeAudit(slots) {
-  const filled = slots.filter(slotIsFilled);
+  // Build proxy objects that look like the old { pseudo, class, spec1, spec2 } shape
+  const filled = slots.filter(slotIsFilled).map(s => {
+    const b = activeBuild(s);
+    return { pseudo: s.pseudo, class: b.class, spec1: b.spec1, spec2: b.spec2 };
+  });
   return UTILITIES.map(u => {
     const provider = u.check(filled);
     return { ...u, provider: provider ? provider.pseudo : null };
   });
 }
 
-/* Returns HTML for one or two role badges depending on dual-spec */
-function getRoleBadgeHtml(s) {
+/* Returns HTML for one or two role badges — accepts a build object { class, spec1, spec2 } */
+function getRoleBadgeHtml(b) {
   const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
-  const r1 = getRole(s.class, s.spec1);
-  const r2 = getRole(s.class, s.spec2);
+  const r1 = getRole(b.class, b.spec1);
+  const r2 = getRole(b.class, b.spec2);
   const badge = r => `<span class="slot-role-badge" style="background:${roleColors[r]}22;border:1px solid ${roleColors[r]};color:${roleColors[r]}">${r}</span>`;
   if (r1 === r2) return badge(r1);
   return `<span style="display:flex;gap:3px;justify-content:center;flex-wrap:wrap">${badge(r1)}${badge(r2)}</span>`;
@@ -698,10 +801,10 @@ function getRoleBadgeHtml(s) {
 function countRoles(slots) {
   const counts = { Tank: 0, Healer: 0, DPS: 0 };
   slots.filter(slotIsFilled).forEach(s => {
-    const r1 = getRole(s.class, s.spec1);
-    const r2 = getRole(s.class, s.spec2);
+    const b = activeBuild(s);
+    const r1 = getRole(b.class, b.spec1);
+    const r2 = getRole(b.class, b.spec2);
     counts[r1]++;
-    // Count the second role too if different (dual-spec versatility)
     if (r1 !== r2) counts[r2]++;
   });
   return counts;
@@ -739,16 +842,25 @@ function renderAuditView(state) {
     </div>`).join('');
 
   const playerCards = state.slots.map((s, i) => {
-    const classColor = CLASS_COLORS[s.class] || '#aaa';
+    const ab = activeBuild(s);
+    const classColor = CLASS_COLORS[ab.class] || '#aaa';
+    const hasB = buildIsFilled(s.buildB);
+    const isA = s.active !== 'B';
+    const toggleHtml = hasB ? `
+      <div class="build-toggle" data-slot="${i}">
+        <button class="toggle-btn ${isA?'active':''}" data-slot="${i}" data-build="A">A</button>
+        <button class="toggle-btn ${!isA?'active':''}" data-slot="${i}" data-build="B">B</button>
+      </div>` : '';
     return `
       <div class="slot-card filled" style="min-height:160px">
-        <div class="slot-num">Joueur ${i+1}</div>
-        <img class="slot-class-icon" src="${classIconUrl(s.class)}" alt="${esc(s.class)}" onerror="this.style.display='none'">
+        <div class="slot-num">Joueur ${i+1}${hasB?' <span style="color:var(--gold);font-size:0.6rem">A/B</span>':''}</div>
+        ${toggleHtml}
+        <img class="slot-class-icon" src="${classIconUrl(ab.class)}" alt="${esc(ab.class)}" onerror="this.style.display='none'">
         <div class="slot-pseudo">${esc(s.pseudo)}</div>
-        <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
-        <div class="slot-race">${esc(s.race)}</div>
-        <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
-        ${getRoleBadgeHtml(s)}
+        <div class="slot-class" style="color:${classColor}">${esc(ab.class)}</div>
+        <div class="slot-race">${esc(ab.race)}</div>
+        <div class="slot-specs">${esc(ab.spec1)} / ${esc(ab.spec2)}</div>
+        ${getRoleBadgeHtml(ab)}
         <button class="btn btn-sm" style="margin-top:0.4rem" data-slot="${i}">✏️ Modifier</button>
       </div>`;
   }).join('');
@@ -784,11 +896,22 @@ function renderAuditView(state) {
     </div>
   `;
 
-  // Modify slot buttons
-  app.querySelectorAll('[data-slot]').forEach(btn => {
+  // Per-slot A/B toggle buttons
+  app.querySelectorAll('.toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
-      // Only clear the edited slot — keep all others intact
+      const build   = btn.getAttribute('data-build');
+      state.slots[slotIdx].active = build;
+      saveState(state);
+      renderAuditView(state); // re-render in place, no full page reload
+    });
+  });
+
+  // Modify slot buttons
+  app.querySelectorAll('button[data-slot]').forEach(btn => {
+    if (btn.classList.contains('toggle-btn')) return; // skip toggles
+    btn.addEventListener('click', () => {
+      const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
       state.slots[slotIdx] = emptySlot();
       saveState(state);
       renderApp();
