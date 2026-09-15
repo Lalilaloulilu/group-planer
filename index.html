@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WoW Forever — Group Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #0a0a0f;
+      --panel-bg:      #13131f;
+      --panel-hover:   #1a1a2e;
+      --gold:          #c8962e;
+      --gold-light:    #e8b84b;
+      --gold-dark:     #6a4e10;
+      --horde-red:     #8b1a1a;
+      --horde-light:   #c94040;
+      --alliance-blue: #1a3a6e;
+      --alliance-light:#6090e0;
+      --border:        2px solid var(--gold);
+      --glow:          inset 0 0 20px rgba(200,150,46,0.08);
+      --text:          #d4c5a0;
+      --text-muted:    #7a6a50;
+      --green:         #1eff00;
+      --red:           #ff4040;
+      --radius:        6px;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 50% 0%, rgba(200,150,46,0.07) 0%, transparent 60%),
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 4px);
+      color: var(--text);
+      font-family: system-ui, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    h1, h2, h3, .wow-heading {
+      font-family: 'Cinzel', 'Palatino Linotype', serif;
+      color: var(--gold);
+      letter-spacing: 0.04em;
+    }
+
+    #site-header {
+      text-align: center;
+      padding: 2rem 1rem 1.4rem;
+      border-bottom: var(--border);
+      background: linear-gradient(180deg, rgba(200,150,46,0.09) 0%, transparent 100%);
+    }
+    #site-header h1 {
+      font-size: clamp(1.4rem, 4vw, 2.2rem);
+      font-weight: 700;
+      text-shadow: 0 0 28px rgba(200,150,46,0.55);
+    }
+    #site-header .subtitle {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      margin-top: 0.25rem;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    #app {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1rem 4rem;
+    }
+
+    .wow-panel {
+      background: var(--panel-bg);
+      border: var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--glow), 0 4px 24px rgba(0,0,0,0.65);
+      padding: 1.4rem 1.6rem;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #0e0e1a;
+      color: var(--gold);
+      border: 1px solid var(--gold-dark);
+      border-radius: var(--radius);
+      padding: 0.45rem 1.1rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+      user-select: none;
+    }
+    .btn:hover { background: #1a1a30; border-color: var(--gold); box-shadow: 0 0 10px rgba(200,150,46,0.3); }
+    .btn:active { background: #22223a; }
+    .btn.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+    .btn.btn-copy { background: #0a1a0a; border-color: #2a6a2a; color: #5eff5e; }
+    .btn.btn-copy:hover { background: #0e260e; border-color: var(--green); box-shadow: 0 0 8px rgba(30,255,0,0.2); }
+
+    /* ─── Faction Picker ─── */
+    .faction-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      max-width: 640px;
+      margin: 3rem auto 0;
+    }
+    .faction-card {
+      background: var(--panel-bg);
+      border-radius: 8px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      border: 2px solid transparent;
+    }
+    .faction-card:hover { transform: translateY(-3px); }
+    .faction-card.horde  { border-color: var(--horde-red);    box-shadow: 0 0 24px rgba(139,26,26,0.4); }
+    .faction-card.horde:hover  { box-shadow: 0 0 40px rgba(200,64,64,0.55); }
+    .faction-card.alliance { border-color: var(--alliance-blue); box-shadow: 0 0 24px rgba(26,58,110,0.4); }
+    .faction-card.alliance:hover { box-shadow: 0 0 40px rgba(96,144,224,0.5); }
+    .faction-card .faction-icon { font-size: 4rem; display: block; margin-bottom: 0.8rem; }
+    .faction-card .faction-name {
+      font-family: 'Cinzel', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+    .faction-card.horde .faction-name { color: var(--horde-light); }
+    .faction-card.alliance .faction-name { color: var(--alliance-light); }
+    .faction-card .faction-desc { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.4rem; }
+    .section-title {
+      text-align: center;
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    /* ─── Slot Cards ─── */
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.8rem;
+      margin-bottom: 1.8rem;
+    }
+    @media (max-width: 700px) {
+      .slots-grid { grid-template-columns: 1fr 1fr; }
+      .faction-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 400px) {
+      .slots-grid { grid-template-columns: 1fr; }
+    }
+
+    .slot-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--gold-dark);
+      border-radius: var(--radius);
+      padding: 0.8rem 0.7rem;
+      text-align: center;
+      min-height: 130px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .slot-card.active { border: 2px solid var(--gold); box-shadow: var(--glow); }
+    .slot-card.filled { border-color: var(--gold-dark); }
+    .slot-card.empty  { border-style: dashed; opacity: 0.5; }
+    .slot-card .slot-num { font-size: 0.7rem; color: var(--text-muted); font-family: 'Cinzel', serif; letter-spacing: 0.1em; }
+    .slot-card .slot-class-icon { width: 40px; height: 40px; border-radius: 4px; border: 1px solid var(--gold-dark); }
+    .slot-card .slot-pseudo { font-size: 0.85rem; font-weight: 600; color: var(--gold-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .slot-card .slot-class { font-size: 0.75rem; font-weight: 600; }
+    .slot-card .slot-race  { font-size: 0.7rem; color: var(--text-muted); }
+    .slot-card .slot-specs { font-size: 0.68rem; color: var(--text-muted); }
+    .slot-card .slot-lock  { font-size: 2rem; opacity: 0.25; }
+    .slot-card .slot-role-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-top: 2px;
+      font-family: 'Cinzel', serif;
+    }
+
+    /* ─── Form ─── */
+    .form-panel { margin-top: 0; }
+    .form-panel h3 { margin-bottom: 1rem; font-size: 0.95rem; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem 1.2rem;
+    }
+    @media (max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group.full-width { grid-column: 1 / -1; }
+    .form-group label { font-size: 0.75rem; color: var(--text-muted); font-family: 'Cinzel', serif; letter-spacing: 0.08em; text-transform: uppercase; }
+    .form-group input,
+    .form-group select {
+      background: #0a0a14;
+      border: 1px solid var(--gold-dark);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 0.45rem 0.7rem;
+      font-size: 0.88rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus { border-color: var(--gold); box-shadow: 0 0 6px rgba(200,150,46,0.2); }
+    .form-group select option { background: #12121f; }
+    .form-actions { margin-top: 1.2rem; display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+    .form-error { color: var(--red); font-size: 0.8rem; margin-top: 0.3rem; }
+
+    /* ─── Audit View ─── */
+    .audit-header { text-align: center; margin-bottom: 1.5rem; }
+    .audit-header .faction-badge {
+      display: inline-block;
+      padding: 0.2rem 1rem;
+      border-radius: 20px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+    .audit-header .faction-badge.horde { background: rgba(139,26,26,0.3); border: 1px solid var(--horde-light); color: var(--horde-light); }
+    .audit-header .faction-badge.alliance { background: rgba(26,58,110,0.3); border: 1px solid var(--alliance-light); color: var(--alliance-light); }
+
+    .roles-bar { display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; flex-wrap: wrap; }
+    .role-badge {
+      padding: 0.3rem 0.9rem;
+      border-radius: 4px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+    .role-badge.tank   { background: rgba(100,150,255,0.15); border: 1px solid #6496ff; color: #6496ff; }
+    .role-badge.healer { background: rgba(30,255,0,0.1);     border: 1px solid #1eff00; color: #1eff00; }
+    .role-badge.dps    { background: rgba(255,64,64,0.12);   border: 1px solid #ff4040; color: #ff4040; }
+
+    .audit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.2rem;
+    }
+    @media (max-width: 620px) { .audit-grid { grid-template-columns: 1fr; } }
+
+    .audit-section h3 { font-size: 0.85rem; letter-spacing: 0.1em; margin-bottom: 0.7rem; border-bottom: 1px solid var(--gold-dark); padding-bottom: 0.4rem; }
+    .audit-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.28rem 0;
+      font-size: 0.82rem;
+      border-bottom: 1px solid rgba(200,150,46,0.06);
+    }
+    .audit-row:last-child { border-bottom: none; }
+    .audit-icon { font-size: 0.95rem; flex-shrink: 0; }
+    .audit-label { flex: 1; color: var(--text); }
+    .audit-provider { color: var(--text-muted); font-size: 0.72rem; font-style: italic; }
+
+    .share-bar { text-align: center; margin-top: 1.8rem; display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+
+    .divider { border: none; border-top: 1px solid var(--gold-dark); margin: 1.2rem 0; }
+
+    .tooltip-wrap { position: relative; display: inline-block; }
+    .tooltip-wrap .tooltip {
+      display: none;
+      position: absolute;
+      bottom: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a2e;
+      border: 1px solid var(--gold-dark);
+      color: var(--text);
+      font-size: 0.72rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .tooltip-wrap:hover .tooltip { display: block; }
+
+    .copied-msg { color: var(--green); font-size: 0.78rem; display: none; }
+    .copied-msg.show { display: inline; }
+  </style>
+</head>
+<body>
+
+<header id="site-header">
+  <h1>⚔ WoW Forever — Group Planner</h1>
+  <p class="subtitle">Compositeur de groupe · 5 joueurs · URL partageable</p>
+</header>
+
+<div id="app"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════════ */
+
+const CLASS_COLORS = {
+  Warrior:  '#C79C6E', Paladin:  '#F58CBA', Hunter:   '#ABD473',
+  Rogue:    '#FFF569', Priest:   '#FFFFFF', Shaman:   '#0070DE',
+  Mage:     '#69CCF0', Warlock:  '#9482C9', Druid:    '#FF7D0A',
+};
+
+const FACTION_RACES = {
+  horde:    ['Orc', 'Tauren', 'Troll', 'Undead', 'Skyborne (Horde)'],
+  alliance: ['Gnome', 'Human', 'Night Elf', 'Dwarf', 'Skyborne (Alliance)'],
+};
+
+const RACE_CLASSES = {
+  'Orc':               ['Warrior','Hunter','Mage','Rogue','Warlock','Shaman'],
+  'Tauren':            ['Warrior','Hunter','Druid','Shaman'],
+  'Troll':             ['Warrior','Hunter','Mage','Rogue','Priest','Warlock','Shaman'],
+  'Undead':            ['Warrior','Mage','Rogue','Priest','Warlock','Paladin'],
+  'Skyborne (Horde)':  ['Warrior','Hunter','Rogue','Druid','Shaman'],
+  'Gnome':             ['Warrior','Mage','Rogue','Priest','Warlock'],
+  'Human':             ['Warrior','Hunter','Mage','Rogue','Priest','Warlock','Paladin'],
+  'Night Elf':         ['Warrior','Hunter','Rogue','Priest','Druid'],
+  'Dwarf':             ['Warrior','Hunter','Rogue','Priest','Paladin','Shaman'],
+  'Skyborne (Alliance)':['Warrior','Hunter','Mage','Rogue','Druid'],
+};
+
+const CLASS_SPECS = {
+  Warrior:  ['Arms','Fury','Protection'],
+  Paladin:  ['Holy','Protection','Retribution'],
+  Hunter:   ['Beast Mastery','Marksmanship','Survival'],
+  Rogue:    ['Assassination','Combat','Subtlety'],
+  Priest:   ['Discipline','Holy','Shadow'],
+  Shaman:   ['Elemental','Enhancement','Restoration'],
+  Mage:     ['Arcane','Fire','Frost'],
+  Warlock:  ['Affliction','Demonology','Destruction'],
+  Druid:    ['Balance','Feral Combat','Restoration'],
+};
+
+/* Rôle par classe+spé */
+function getRole(cls, spec) {
+  if (cls === 'Warrior'  && spec === 'Protection')  return 'Tank';
+  if (cls === 'Paladin'  && spec === 'Protection')  return 'Tank';
+  if (cls === 'Druid'    && spec === 'Feral Combat') return 'Tank'; // can be
+  if (cls === 'Paladin'  && spec === 'Holy')        return 'Healer';
+  if (cls === 'Priest'   && (spec === 'Holy' || spec === 'Discipline')) return 'Healer';
+  if (cls === 'Shaman'   && spec === 'Restoration') return 'Healer';
+  if (cls === 'Druid'    && spec === 'Restoration') return 'Healer';
+  return 'DPS';
+}
+
+/* Utilitaires : { label, desc, checker(slots) → playerName|null } */
+const UTILITIES = [
+  // — Buffs majeurs
+  { cat:'Buffs', label:'Bloodlust / Héroïsme', desc:'Haste 30% pendant 40s',
+    check: s => s.find(p => p.class === 'Shaman') },
+  { cat:'Buffs', label:'Fortitude (Stamina)',  desc:'+Stamina toute la guilde',
+    check: s => s.find(p => p.class === 'Priest') },
+  { cat:'Buffs', label:'Mark of the Wild',     desc:'+Stats/résistances',
+    check: s => s.find(p => p.class === 'Druid') },
+  { cat:'Buffs', label:'Bénédiction (Paladin)',desc:'Might/Wisdom/Kings',
+    check: s => s.find(p => p.class === 'Paladin') },
+  { cat:'Buffs', label:'Aspect of the Pack',   desc:'+Vitesse de déplacement',
+    check: s => s.find(p => p.class === 'Hunter') },
+  { cat:'Buffs', label:'Arcane Intellect',     desc:'+Intellect',
+    check: s => s.find(p => p.class === 'Mage') },
+  // — Cooldowns offensifs/défensifs
+  { cat:'Cooldowns', label:'Battle Resurrection', desc:'Rez en combat (Druid)',
+    check: s => s.find(p => p.class === 'Druid') },
+  { cat:'Cooldowns', label:'Innervate',            desc:'Regen mana instantané (Druid)',
+    check: s => s.find(p => p.class === 'Druid') },
+  { cat:'Cooldowns', label:'Power Infusion',       desc:'Haste caster 20% (Prêtre Disc.)',
+    check: s => s.find(p => p.class === 'Priest' && (p.spec1==='Discipline'||p.spec2==='Discipline')) },
+  { cat:'Cooldowns', label:'Mana Tide',            desc:'Regen mana de groupe (Chaman Resto)',
+    check: s => s.find(p => p.class === 'Shaman' && (p.spec1==='Restoration'||p.spec2==='Restoration')) },
+  { cat:'Cooldowns', label:'Judgement of Wisdom',  desc:'Regen mana sur coup',
+    check: s => s.find(p => p.class === 'Paladin') },
+  // — Crowd Control
+  { cat:'Crowd Control', label:'Polymorph (Sheep)',  desc:'CC cible unique (Mage)',
+    check: s => s.find(p => p.class === 'Mage') },
+  { cat:'Crowd Control', label:'Sap',                desc:'CC hors combat (Voleur)',
+    check: s => s.find(p => p.class === 'Rogue') },
+  { cat:'Crowd Control', label:'Freezing Trap',      desc:'CC cible unique (Chasseur)',
+    check: s => s.find(p => p.class === 'Hunter') },
+  { cat:'Crowd Control', label:'Banish',             desc:'CC démons/élémentaires (Dém.)',
+    check: s => s.find(p => p.class === 'Warlock') },
+  { cat:'Crowd Control', label:'Hibernate',          desc:'CC bêtes/dragonkins (Druide)',
+    check: s => s.find(p => p.class === 'Druid') },
+  { cat:'Crowd Control', label:'Repentance',         desc:'CC humanoïdes (Paladin Rét.)',
+    check: s => s.find(p => p.class === 'Paladin' && (p.spec1==='Retribution'||p.spec2==='Retribution')) },
+  // — Interrupts
+  { cat:'Interrupts', label:'Kick (Voleur)',     desc:'Interrupt CD court',
+    check: s => s.find(p => p.class === 'Rogue') },
+  { cat:'Interrupts', label:'Pummel (Guerrier)', desc:'Interrupt CD court',
+    check: s => s.find(p => p.class === 'Warrior') },
+  { cat:'Interrupts', label:'Wind Shear (Chaman)',desc:'Interrupt CD court',
+    check: s => s.find(p => p.class === 'Shaman') },
+  { cat:'Interrupts', label:'Counterspell (Mage)',desc:'Interrupt + lockout',
+    check: s => s.find(p => p.class === 'Mage') },
+  // — Utility/Versatilité
+  { cat:'Versatilité', label:'Soin de secours (off-heal)',desc:'Paladin Rét / Chaman Enh',
+    check: s => s.find(p =>
+      (p.class==='Paladin' && (p.spec1==='Retribution'||p.spec2==='Retribution'))||
+      (p.class==='Shaman'  && (p.spec1==='Enhancement' ||p.spec2==='Enhancement'))
+    )},
+  { cat:'Versatilité', label:'Burst AoE',            desc:'Mage / Démoniste / Chaman Élém.',
+    check: s => s.find(p => ['Mage','Warlock'].includes(p.class)||
+      (p.class==='Shaman' && (p.spec1==='Elemental'||p.spec2==='Elemental'))) },
+  { cat:'Versatilité', label:'Stealth / Scout',      desc:'Voleur ou Druide Féral',
+    check: s => s.find(p => p.class==='Rogue'||
+      (p.class==='Druid' && (p.spec1==='Feral Combat'||p.spec2==='Feral Combat'))) },
+  { cat:'Versatilité', label:'Cure Poison',           desc:'Druide / Paladin / Chaman',
+    check: s => s.find(p => ['Druid','Paladin','Shaman'].includes(p.class)) },
+  { cat:'Versatilité', label:'Decurse',               desc:'Druide / Mage',
+    check: s => s.find(p => ['Druid','Mage'].includes(p.class)) },
+];
+
+/* ═══════════════════════════════════════════════════════
+   STATE ENGINE
+═══════════════════════════════════════════════════════ */
+
+function emptySlot() { return { pseudo:'', race:'', class:'', spec1:'', spec2:'' }; }
+function emptyState(faction) {
+  return { faction, slots: [emptySlot(),emptySlot(),emptySlot(),emptySlot(),emptySlot()] };
+}
+
+function encodeState(obj) {
+  try { return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(obj))))); }
+  catch(e) { return ''; }
+}
+
+function decodeState(hash) {
+  try { return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash))))); }
+  catch(e) { return null; }
+}
+
+function loadState() {
+  const h = window.location.hash.slice(1);
+  if (!h) return null;
+  return decodeState(h);
+}
+
+function saveState(state) {
+  window.location.replace('#' + encodeState(state));
+}
+
+/* ═══════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════ */
+
+function classIconUrl(cls) {
+  const name = cls.toLowerCase().replace(/\s+/g, '');
+  return `https://wow.zamimg.com/images/wow/icons/medium/classicon_${name}.jpg`;
+}
+
+function slotIsFilled(s) { return s.pseudo && s.race && s.class && s.spec1 && s.spec2; }
+
+function nextEmptyIndex(slots) {
+  return slots.findIndex(s => !slotIsFilled(s));
+}
+
+function allFilled(slots) { return slots.every(slotIsFilled); }
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   VIEW — FACTION PICKER
+═══════════════════════════════════════════════════════ */
+
+function renderFactionPicker() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <p class="section-title" style="margin-top:2rem">Choisissez votre faction</p>
+    <p style="text-align:center;color:var(--text-muted);font-size:0.82rem;margin-bottom:0.2rem">
+      Le créateur du groupe sélectionne la faction — un lien sera généré à partager.
+    </p>
+    <div class="faction-grid">
+      <div class="faction-card horde" id="pick-horde" tabindex="0" role="button" aria-label="Choisir la Horde">
+        <span class="faction-icon">🔴</span>
+        <div class="faction-name">Horde</div>
+        <div class="faction-desc">Orc · Tauren · Troll · Undead · Skyborne</div>
+      </div>
+      <div class="faction-card alliance" id="pick-alliance" tabindex="0" role="button" aria-label="Choisir l'Alliance">
+        <span class="faction-icon">🔵</span>
+        <div class="faction-name">Alliance</div>
+        <div class="faction-desc">Humain · Nain · Gnome · Elfe de Nuit · Skyborne</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('pick-horde').addEventListener('click', () => pickFaction('horde'));
+  document.getElementById('pick-alliance').addEventListener('click', () => pickFaction('alliance'));
+  ['pick-horde','pick-alliance'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') document.getElementById(id).click();
+    });
+  });
+}
+
+function pickFaction(faction) {
+  const state = emptyState(faction);
+  saveState(state);
+  renderApp();
+}
+
+/* ═══════════════════════════════════════════════════════
+   VIEW — SLOT CARDS (mini, read-only)
+═══════════════════════════════════════════════════════ */
+
+function renderSlotCards(slots, faction, activeIndex) {
+  return slots.map((s, i) => {
+    const filled = slotIsFilled(s);
+    const isActive = i === activeIndex;
+    const classColor = CLASS_COLORS[s.class] || '#aaa';
+
+    if (filled) {
+      const role1 = getRole(s.class, s.spec1);
+      const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
+      return `
+        <div class="slot-card filled ${isActive?'active':''}" id="slot-card-${i}">
+          <div class="slot-num">Joueur ${i+1}</div>
+          <img class="slot-class-icon" src="${classIconUrl(s.class)}" alt="${esc(s.class)}" title="${esc(s.class)}" onerror="this.style.display='none'">
+          <div class="slot-pseudo">${esc(s.pseudo)}</div>
+          <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
+          <div class="slot-race">${esc(s.race)}</div>
+          <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
+          <span class="slot-role-badge" style="background:${roleColors[role1]}22;border:1px solid ${roleColors[role1]};color:${roleColors[role1]}">${role1}</span>
+        </div>`;
+    } else if (isActive) {
+      return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
+    } else {
+      return `<div class="slot-card empty" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><span class="slot-lock">🔒</span></div>`;
+    }
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════
+   VIEW — GROUP VIEW (slots + form)
+═══════════════════════════════════════════════════════ */
+
+function renderGroupView(state) {
+  const app = document.getElementById('app');
+  const idx = nextEmptyIndex(state.slots);
+  const factionLabel = state.faction === 'horde' ? '<span class="horde">⚔ Horde</span>' : '<span class="alliance">🛡 Alliance</span>';
+  const factionRaces = FACTION_RACES[state.faction] || [];
+
+  let formHtml = '';
+  if (idx >= 0) {
+    const raceOptions = factionRaces.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    formHtml = `
+      <div class="wow-panel form-panel" style="margin-top:1.2rem">
+        <h3>Joueur ${idx+1} — Remplissez votre fiche</h3>
+        <form id="slot-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="f-pseudo">Pseudo</label>
+              <input id="f-pseudo" type="text" maxlength="30" placeholder="Votre pseudo in-game" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="f-race">Race</label>
+              <select id="f-race">
+                <option value="">— Choisir —</option>
+                ${raceOptions}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="f-class">Classe</label>
+              <select id="f-class" disabled>
+                <option value="">— Race d'abord —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="f-spec1">Spécialisation principale</label>
+              <select id="f-spec1" disabled>
+                <option value="">— Classe d'abord —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="f-spec2">Spécialisation secondaire</label>
+              <select id="f-spec2" disabled>
+                <option value="">— Classe d'abord —</option>
+              </select>
+            </div>
+          </div>
+          <div id="form-error" class="form-error"></div>
+          <div class="form-actions">
+            <button type="submit" class="btn">Valider mon slot →</button>
+            <button type="button" class="btn btn-copy" id="btn-copy">📋 Copier le lien</button>
+            <span class="copied-msg" id="copied-msg">✓ Lien copié !</span>
+          </div>
+        </form>
+      </div>`;
+  }
+
+  app.innerHTML = `
+    <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem;flex-wrap:wrap">
+      <span style="font-family:'Cinzel',serif;font-size:0.9rem">${factionLabel}</span>
+      <span style="color:var(--text-muted);font-size:0.78rem">— Partagez l'URL après avoir rempli votre slot pour passer au joueur suivant</span>
+    </div>
+    <div class="slots-grid">${renderSlotCards(state.slots, state.faction, idx)}</div>
+    ${formHtml}
+  `;
+
+  if (idx < 0) return; // all filled, handled by renderApp
+
+  // Wire cascading dropdowns
+  const raceEl  = document.getElementById('f-race');
+  const classEl = document.getElementById('f-class');
+  const spec1El = document.getElementById('f-spec1');
+  const spec2El = document.getElementById('f-spec2');
+
+  raceEl.addEventListener('change', () => {
+    const classes = RACE_CLASSES[raceEl.value] || [];
+    classEl.innerHTML = '<option value="">— Choisir —</option>' +
+      classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    classEl.disabled = classes.length === 0;
+    spec1El.innerHTML = '<option value="">— Classe d\'abord —</option>';
+    spec2El.innerHTML = '<option value="">— Classe d\'abord —</option>';
+    spec1El.disabled = true;
+    spec2El.disabled = true;
+  });
+
+  classEl.addEventListener('change', () => {
+    const specs = CLASS_SPECS[classEl.value] || [];
+    const opts = specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    spec1El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+    spec2El.innerHTML = '<option value="">— Choisir —</option>' + opts;
+    spec1El.disabled = specs.length === 0;
+    spec2El.disabled = specs.length === 0;
+  });
+
+  document.getElementById('slot-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const pseudo = document.getElementById('f-pseudo').value.trim();
+    const race   = raceEl.value;
+    const cls    = classEl.value;
+    const spec1  = spec1El.value;
+    const spec2  = spec2El.value;
+    const err    = document.getElementById('form-error');
+
+    if (!pseudo || !race || !cls || !spec1 || !spec2) {
+      err.textContent = 'Tous les champs sont requis.'; return;
+    }
+    if (spec1 === spec2) {
+      err.textContent = 'Les deux spécialisations doivent être différentes.'; return;
+    }
+    err.textContent = '';
+
+    state.slots[idx] = { pseudo, race, class: cls, spec1, spec2 };
+    saveState(state);
+    renderApp();
+  });
+
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      const msg = document.getElementById('copied-msg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2500);
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUDIT
+═══════════════════════════════════════════════════════ */
+
+function computeAudit(slots) {
+  const filled = slots.filter(slotIsFilled);
+  return UTILITIES.map(u => {
+    const provider = u.check(filled);
+    return { ...u, provider: provider ? provider.pseudo : null };
+  });
+}
+
+function countRoles(slots) {
+  const counts = { Tank: 0, Healer: 0, DPS: 0 };
+  slots.filter(slotIsFilled).forEach(s => {
+    const r1 = getRole(s.class, s.spec1);
+    const r2 = getRole(s.class, s.spec2);
+    // Use spec1 as primary role indicator
+    counts[r1]++;
+    // If spec2 gives a different role (e.g. off-spec), mark it too
+    if (r1 !== r2 && (r2 === 'Tank' || r2 === 'Healer')) {
+      counts[r2 + '_off'] = (counts[r2 + '_off'] || 0) + 1;
+    }
+  });
+  return counts;
+}
+
+/* ═══════════════════════════════════════════════════════
+   VIEW — AUDIT VIEW
+═══════════════════════════════════════════════════════ */
+
+function renderAuditView(state) {
+  const app = document.getElementById('app');
+  const audit = computeAudit(state.slots);
+  const roles = countRoles(state.slots);
+
+  const factionClass = state.faction;
+  const factionLabel = state.faction === 'horde' ? '⚔ Horde' : '🛡 Alliance';
+
+  // Group audit by category
+  const cats = {};
+  audit.forEach(u => {
+    if (!cats[u.cat]) cats[u.cat] = [];
+    cats[u.cat].push(u);
+  });
+
+  const auditSections = Object.entries(cats).map(([cat, items]) => `
+    <div class="audit-section wow-panel" style="padding:1rem 1.2rem">
+      <h3>${esc(cat)}</h3>
+      ${items.map(u => `
+        <div class="audit-row tooltip-wrap">
+          <span class="audit-icon">${u.provider ? '✅' : '❌'}</span>
+          <span class="audit-label">${esc(u.label)}</span>
+          ${u.provider ? `<span class="audit-provider">${esc(u.provider)}</span>` : ''}
+          <span class="tooltip">${esc(u.desc)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+
+  const playerCards = state.slots.map((s, i) => {
+    const classColor = CLASS_COLORS[s.class] || '#aaa';
+    const role1 = getRole(s.class, s.spec1);
+    const role2 = getRole(s.class, s.spec2);
+    const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
+    return `
+      <div class="slot-card filled" style="min-height:160px">
+        <div class="slot-num">Joueur ${i+1}</div>
+        <img class="slot-class-icon" src="${classIconUrl(s.class)}" alt="${esc(s.class)}" onerror="this.style.display='none'">
+        <div class="slot-pseudo">${esc(s.pseudo)}</div>
+        <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
+        <div class="slot-race">${esc(s.race)}</div>
+        <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
+        <span class="slot-role-badge" style="background:${roleColors[role1]}22;border:1px solid ${roleColors[role1]};color:${roleColors[role1]}">${role1}</span>
+        <button class="btn btn-sm" style="margin-top:0.4rem" data-slot="${i}">✏️ Modifier</button>
+      </div>`;
+  }).join('');
+
+  const presentCount = audit.filter(u => u.provider).length;
+  const totalCount = audit.length;
+  const pct = Math.round(presentCount / totalCount * 100);
+
+  app.innerHTML = `
+    <div class="audit-header">
+      <div class="faction-badge ${factionClass}">${factionLabel}</div>
+      <h2 style="font-size:1.15rem;margin-top:0.3rem">Composition du groupe — Audit complet</h2>
+      <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem">
+        Versatilité : <strong style="color:${pct>=70?'var(--green)':pct>=50?'var(--gold)':'var(--red)'}">${pct}%</strong>
+        (${presentCount}/${totalCount} utilitaires couverts)
+      </div>
+    </div>
+
+    <div class="roles-bar">
+      <span class="role-badge tank">🛡 Tank × ${roles.Tank}</span>
+      <span class="role-badge healer">💚 Heal × ${roles.Healer}</span>
+      <span class="role-badge dps">⚔ DPS × ${roles.DPS}</span>
+    </div>
+
+    <div class="slots-grid" style="margin-bottom:1.5rem">${playerCards}</div>
+
+    <div class="audit-grid">${auditSections}</div>
+
+    <div class="share-bar">
+      <button class="btn btn-copy" id="btn-copy-audit">📋 Copier le lien du groupe</button>
+      <span class="copied-msg" id="copied-audit-msg">✓ Lien copié !</span>
+      <button class="btn" id="btn-reset">🗑 Nouveau groupe</button>
+    </div>
+  `;
+
+  // Modify slot buttons
+  app.querySelectorAll('[data-slot]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
+      // Clear this slot and all subsequent slots
+      for (let i = slotIdx; i < 5; i++) state.slots[i] = emptySlot();
+      saveState(state);
+      renderApp();
+    });
+  });
+
+  document.getElementById('btn-copy-audit').addEventListener('click', () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      const msg = document.getElementById('copied-audit-msg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2500);
+    });
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    if (confirm('Créer un nouveau groupe ? (le lien actuel sera perdu)')) {
+      window.location.hash = '';
+      renderApp();
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   ROUTER
+═══════════════════════════════════════════════════════ */
+
+function renderApp() {
+  const state = loadState();
+
+  if (!state || !state.faction) {
+    renderFactionPicker();
+    return;
+  }
+
+  if (allFilled(state.slots)) {
+    renderAuditView(state);
+    return;
+  }
+
+  renderGroupView(state);
+}
+
+// Initial render
+renderApp();
+
+// React to hash changes (back/forward navigation)
+window.addEventListener('hashchange', renderApp);
+</script>
+
+</body>
+</html>
