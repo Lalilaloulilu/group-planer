@@ -529,8 +529,6 @@ function renderSlotCards(slots, faction, activeIndex) {
     const classColor = CLASS_COLORS[s.class] || '#aaa';
 
     if (filled) {
-      const role1 = getRole(s.class, s.spec1);
-      const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
       return `
         <div class="slot-card filled ${isActive?'active':''}" id="slot-card-${i}">
           <div class="slot-num">Joueur ${i+1}</div>
@@ -539,7 +537,7 @@ function renderSlotCards(slots, faction, activeIndex) {
           <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
           <div class="slot-race">${esc(s.race)}</div>
           <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
-          <span class="slot-role-badge" style="background:${roleColors[role1]}22;border:1px solid ${roleColors[role1]};color:${roleColors[role1]}">${role1}</span>
+          ${getRoleBadgeHtml(s)}
         </div>`;
     } else if (isActive) {
       return `<div class="slot-card active" id="slot-card-${i}"><div class="slot-num">Joueur ${i+1}</div><div style="color:var(--gold);font-size:0.78rem;margin-top:0.3rem">→ Votre slot</div></div>`;
@@ -687,17 +685,24 @@ function computeAudit(slots) {
   });
 }
 
+/* Returns HTML for one or two role badges depending on dual-spec */
+function getRoleBadgeHtml(s) {
+  const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
+  const r1 = getRole(s.class, s.spec1);
+  const r2 = getRole(s.class, s.spec2);
+  const badge = r => `<span class="slot-role-badge" style="background:${roleColors[r]}22;border:1px solid ${roleColors[r]};color:${roleColors[r]}">${r}</span>`;
+  if (r1 === r2) return badge(r1);
+  return `<span style="display:flex;gap:3px;justify-content:center;flex-wrap:wrap">${badge(r1)}${badge(r2)}</span>`;
+}
+
 function countRoles(slots) {
   const counts = { Tank: 0, Healer: 0, DPS: 0 };
   slots.filter(slotIsFilled).forEach(s => {
     const r1 = getRole(s.class, s.spec1);
     const r2 = getRole(s.class, s.spec2);
-    // Use spec1 as primary role indicator
     counts[r1]++;
-    // If spec2 gives a different role (e.g. off-spec), mark it too
-    if (r1 !== r2 && (r2 === 'Tank' || r2 === 'Healer')) {
-      counts[r2 + '_off'] = (counts[r2 + '_off'] || 0) + 1;
-    }
+    // Count the second role too if different (dual-spec versatility)
+    if (r1 !== r2) counts[r2]++;
   });
   return counts;
 }
@@ -735,9 +740,6 @@ function renderAuditView(state) {
 
   const playerCards = state.slots.map((s, i) => {
     const classColor = CLASS_COLORS[s.class] || '#aaa';
-    const role1 = getRole(s.class, s.spec1);
-    const role2 = getRole(s.class, s.spec2);
-    const roleColors = { Tank:'#6496ff', Healer:'#1eff00', DPS:'#ff6060' };
     return `
       <div class="slot-card filled" style="min-height:160px">
         <div class="slot-num">Joueur ${i+1}</div>
@@ -746,7 +748,7 @@ function renderAuditView(state) {
         <div class="slot-class" style="color:${classColor}">${esc(s.class)}</div>
         <div class="slot-race">${esc(s.race)}</div>
         <div class="slot-specs">${esc(s.spec1)} / ${esc(s.spec2)}</div>
-        <span class="slot-role-badge" style="background:${roleColors[role1]}22;border:1px solid ${roleColors[role1]};color:${roleColors[role1]}">${role1}</span>
+        ${getRoleBadgeHtml(s)}
         <button class="btn btn-sm" style="margin-top:0.4rem" data-slot="${i}">✏️ Modifier</button>
       </div>`;
   }).join('');
