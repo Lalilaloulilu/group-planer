@@ -970,10 +970,12 @@ function renderAuditView(state) {
     if (btn.classList.contains('toggle-btn')) return; // skip toggles
     btn.addEventListener('click', () => {
       const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
-      _prefill = { ...state.slots[slotIdx] }; // save current values for form pre-fill
+      const saved = { ...state.slots[slotIdx] }; // snapshot before clearing
       state.slots[slotIdx] = emptySlot();
-      saveState(state);
-      renderApp();
+      saveState(state); // triggers hashchange → renderApp() runs with _prefill=null (blank form)
+      // Set _prefill AFTER saveState so hashchange fires first, then we re-render with values
+      _prefill = saved;
+      renderGroupView(state); // explicit re-render overwrites the blank one, now with _prefill set
     });
   });
 
