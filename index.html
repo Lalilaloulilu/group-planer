@@ -494,14 +494,96 @@ function migrateSlot(s) {
   return emptySlot();
 }
 
-function encodeState(obj) {
-  try { return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(obj))))); }
-  catch(e) { return ''; }
+/* ── Lookup tables for compact encoding ── */
+const _FACTIONS  = ['horde','alliance'];
+const _ALL_RACES = ['Orc','Tauren','Troll','Undead','Skyborne (Horde)',
+                    'Gnome','Human','Night Elf','Dwarf','Skyborne (Alliance)'];
+const _CLASSES   = ['Warrior','Paladin','Hunter','Rogue','Priest','Shaman','Mage','Warlock','Druid'];
+const _SPECS_ALL = ['Arms','Fury','Protection',                        // Warrior 0-2
+                    'Holy','Retribution',                               // Paladin 3-4 (Protection=2)
+                    'Beast Mastery','Marksmanship','Survival',          // Hunter 5-7
+                    'Assassination','Combat','Subtlety',                // Rogue 8-10
+                    'Discipline','Shadow',                              // Priest 11-12 (Holy=3)
+                    'Elemental','Enhancement','Restoration',            // Shaman 13-15
+                    'Arcane','Fire','Frost',                            // Mage 16-18
+                    'Affliction','Demonology','Destruction',            // Warlock 19-21
+                    'Balance','Feral Combat'];                          // Druid 22-23 (Restoration=15)
+// Map each spec name to a global index (unique across all classes)
+const _SPEC_IDX = {};
+_SPECS_ALL.forEach((s,i) => _SPEC_IDX[s] = i);
+// Shared specs reuse existing indices: Holy=3, Protection=2, Restoration=15
+_SPEC_IDX['Holy'] = 3; _SPEC_IDX['Protection'] = 2; _SPEC_IDX['Restoration'] = 15;
+const _PROFS = ['Alchemy','Blacksmithing','Enchanting','Engineering',
+                'Leatherworking','Tailoring','Herbalism','Mining','Skinning'];
+
+function _bi(v, arr) { if (!v) return ''; const i = arr.indexOf(v); return i < 0 ? '' : i; }
+
+/* Build a reverse lookup array: index → spec name (for decode) */
+const _SPEC_BY_IDX = [];
+Object.entries(_SPEC_IDX).forEach(([name, idx]) => { _SPEC_BY_IDX[idx] = name; });
+
+function _encBuild(b) {
+  if (!b || !b.race) return '';
+  const ri = _bi(b.race, _ALL_RACES);
+  const ci = _bi(b.class, _CLASSES);
+  const s1 = b.spec1 in _SPEC_IDX ? _SPEC_IDX[b.spec1] : '';
+  const s2 = b.spec2 in _SPEC_IDX ? _SPEC_IDX[b.spec2] : '';
+  const p1 = _bi(b.prof1, _PROFS);
+  const p2 = _bi(b.prof2, _PROFS);
+  return [ri,ci,s1,s2,p1,p2].join(',');
+}
+
+function _decBuild(str) {
+  if (!str) return emptyBuild();
+  const [ri,ci,s1i,s2i,p1i,p2i] = str.split(',');
+  const lu = (v, arr) => (v === '' || v === undefined) ? '' : (arr[+v] || '');
+  return {
+    race:  lu(ri,  _ALL_RACES),
+    class: lu(ci,  _CLASSES),
+    spec1: lu(s1i, _SPEC_BY_IDX),
+    spec2: lu(s2i, _SPEC_BY_IDX),
+    prof1: lu(p1i, _PROFS),
+    prof2: lu(p2i, _PROFS),
+  };
+}
+
+function encodeState(state) {
+  try {
+    const fi = _FACTIONS.indexOf(state.faction);
+    const slots = state.slots.map(s => {
+      const a = _encBuild(s.buildA);
+      const b = s.buildB ? _encBuild(s.buildB) : '';
+      const act = s.active === 'B' ? 1 : 0;
+      return [encodeURIComponent(s.pseudo||''), a, b, act].join('|');
+    }).join(';');
+    const raw = fi + ';' + slots;
+    return encodeURIComponent(btoa(unescape(encodeURIComponent(raw))));
+  } catch(e) { return ''; }
 }
 
 function decodeState(hash) {
-  try { return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash))))); }
-  catch(e) { return null; }
+  try {
+    const raw = decodeURIComponent(escape(atob(decodeURIComponent(hash))));
+    // Legacy JSON format (starts with '{')
+    if (raw.trimStart().startsWith('{')) {
+      return JSON.parse(raw);
+    }
+    // Compact format: "fi;pseudo|buildA|buildB|act;..."
+    const parts = raw.split(';');
+    const faction = _FACTIONS[+parts[0]] || 'alliance';
+    const slots = parts.slice(1).map(p => {
+      const [pseudoEnc, aStr, bStr, actStr] = p.split('|');
+      return {
+        pseudo: decodeURIComponent(pseudoEnc || ''),
+        buildA: _decBuild(aStr),
+        buildB: bStr ? _decBuild(bStr) : null,
+        active: actStr === '1' ? 'B' : 'A',
+      };
+    });
+    // Pad to 5 slots
+    while (slots.length < 5) slots.push(emptySlot());
+    return { faction, slots };
+  } catch(e) { return null; }
 }
 
 function loadState() {
@@ -509,7 +591,7 @@ function loadState() {
   if (!h) return null;
   const raw = decodeState(h);
   if (!raw) return null;
-  // Migrate old slot format if needed
+  // Migrate old JSON slot format if needed
   if (raw.slots) raw.slots = raw.slots.map(migrateSlot);
   return raw;
 }
